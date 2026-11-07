@@ -291,7 +291,7 @@ ST*850*0001~BEG*00*SA*PO4711**20260907~SE*3*0001~GE*1*1~IEA*1*000000001~";
         write("NAD+BY/4/2", "late", &mut rewriting).expect("pads");
         assert!(write("QTY/1", "1", &mut rewriting).is_err());
         let written = rewriting.finish().expect("finishes");
-        let text = String::from_utf8_lossy(written.bytes()).into_owned();
+        let text = String::from_utf8_lossy(written.bytes());
         assert!(text.contains("BGM+220+PO?+1'"), "{text}");
         assert!(text.contains("NAD+BY+BUYER++:late'"), "{text}");
         assert!(text.starts_with("UNA:+.? 'UNB"), "{text}");
