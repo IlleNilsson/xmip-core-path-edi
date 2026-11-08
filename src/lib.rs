@@ -19,7 +19,7 @@
 use contract::ContractError;
 use contract::segment::Segment;
 use edifact::syntax::Interchange as Edifact;
-use path::{CompiledExpression, Content, Editable, Form, PathLanguage, Rewriting};
+use path::{CompiledExpression, Content, Editable, Form, Namespaces, PathLanguage, Rewriting};
 use stream::Stream;
 use x12::syntax::Interchange as X12;
 use xcore::ScalarValue;
@@ -32,7 +32,12 @@ impl PathLanguage for EdiLanguage {
         "edi"
     }
 
-    fn compile(&self, expression: &str) -> Result<Box<dyn CompiledExpression>, ContractError> {
+    fn compile(
+        &self,
+        expression: &str,
+        namespaces: &Namespaces,
+    ) -> Result<Box<dyn CompiledExpression>, ContractError> {
+        namespaces.unused_by(self.language())?;
         Ok(Box::new(Address::parse(expression)?))
     }
 }
@@ -227,7 +232,7 @@ NAD+SU+SUPPLIER'UNT+6+1'UNZ+1+REF001'";
     fn read(path: &str, text: &str) -> Option<ScalarValue> {
         let stream = stream(text);
         EdiLanguage
-            .compile(path)
+            .compile(path, &Namespaces::new())
             .expect("compiles")
             .read(&Content::of(&stream))
             .expect("reads")
@@ -246,7 +251,10 @@ NAD+SU+SUPPLIER'UNT+6+1'UNZ+1+REF001'";
         assert_eq!(read("NAD+XX/2", ORDERS), None);
         assert_eq!(read("BGM/9", ORDERS), None);
         for wrong in ["bgm/2", "BGM", "BGM/0", "BGM/a", "BGM/1/2/3", "TOOLONG/1"] {
-            assert!(EdiLanguage.compile(wrong).is_err(), "{wrong}");
+            assert!(
+                EdiLanguage.compile(wrong, &Namespaces::new()).is_err(),
+                "{wrong}"
+            );
         }
     }
 
@@ -260,7 +268,7 @@ ST*850*0001~BEG*00*SA*PO4711**20260907~SE*3*0001~GE*1*1~IEA*1*000000001~";
         assert_eq!(read("BEG/3", PURCHASE), Some(text("PO4711")));
         let mut rewriting = Rewriting::of(&stream(PURCHASE), StreamId::new(2));
         EdiLanguage
-            .compile("BEG/3")
+            .compile("BEG/3", &Namespaces::new())
             .and_then(|compiled| compiled.write(&mut rewriting, ScalarValue::Text("PO4712".into())))
             .expect("writes");
         let written = rewriting.finish().expect("finishes");
@@ -270,7 +278,7 @@ ST*850*0001~BEG*00*SA*PO4711**20260907~SE*3*0001~GE*1*1~IEA*1*000000001~";
         );
         let mut rewriting = Rewriting::of(&stream(PURCHASE), StreamId::new(3));
         EdiLanguage
-            .compile("BEG/3")
+            .compile("BEG/3", &Namespaces::new())
             .and_then(|compiled| compiled.write(&mut rewriting, ScalarValue::Text("a*b".into())))
             .expect("held until written");
         assert!(
@@ -284,7 +292,7 @@ ST*850*0001~BEG*00*SA*PO4711**20260907~SE*3*0001~GE*1*1~IEA*1*000000001~";
         let mut rewriting = Rewriting::of(&stream(ORDERS), StreamId::new(2));
         let write = |path: &str, value: &str, rewriting: &mut Rewriting| {
             EdiLanguage
-                .compile(path)
+                .compile(path, &Namespaces::new())
                 .and_then(|compiled| compiled.write(rewriting, ScalarValue::Text(value.into())))
         };
         write("BGM/2", "PO+1", &mut rewriting).expect("writes");
